@@ -1,0 +1,162 @@
+﻿<!DOCTYPE html>
+<html lang="ja">
+<head>
+	<title>お題 その３</title>
+	<style>
+	body { font-family: メイリオ, Meiryo; }
+	#table { font-size: 20px; border-collapse: collapse; visibility: hidden; }
+	#table th { background-color: #ddddff; }
+	#table th, #table td { border: 1px solid black; }
+	#table td:nth-child(n+2) { width: 36px; height: 34px; text-align: center; }
+	</style>
+</head>
+
+<body>
+	<div>JSON形式ファイルを指定してください：<br>
+		<input type="file" id="files" name="files[]" style="width: 400px;" />
+	</div>
+	<br>
+	<div id="list">
+		<table id="table"></table>
+	</div>
+
+	<script>
+	// JSONファイルの読み込み
+	document.getElementById('files').addEventListener('change', 
+		function handleFileSelect(evt) {
+			var reader = new FileReader();
+			reader.onload = function(e) {
+				try {
+					var data = JSON.parse(reader.result);
+					show_score(data);
+					document.getElementById("table").style.visibility = "visible";
+				} catch(e) {
+					alert(e.toString());
+				}
+			};
+			reader.readAsText(evt.target.files[0]);
+		}, false);
+
+
+	// スコアの描画
+	function show_score(data) {
+
+		// フレーム番号出力
+		var html = '<tr><th>フレーム</th>';
+		for (var f = 1; f <= data.frame; f++) {
+			var span = (f == data.frame) ? 3 : 2;
+			html += '<td colspan="' + span + '">' + f + '</td>';
+		}
+		html += '</tr>'
+
+		// 1投目出力
+		function output1(t) {
+			if (t == null)
+				html += '<td></td>';
+			else if (t.foul)
+				html += '<td>Ｆ</td>';
+			else if (t.pin == 0)
+				html += '<td>Ｇ</td>';
+			else if (t.pin >= data.pin_max)
+				html += '<td>▶◀</td>';
+			else if (t.split)
+				html += '<td>(' + t.pin + ')</td>';
+			else
+				html += '<td>' + t.pin + '</td>';
+		}
+
+		// 1投目+2投目出力
+		function output2(t1, t2) {
+			output1(t1);
+			if (t2 == null)
+				output1(t2);
+			else if (t2.pin == 0)
+				html += '<td>－</td>';
+			else if (t1.pin + t2.pin >= data.pin_max)
+				html += '<td>◢</td>';
+			else
+				output1(t2);
+		}
+
+		// スコアのカウントと出力
+		var scores = [];
+		var total = 0;
+		var p = 0;
+		html += '<tr><th>ピン数</th>';
+		for (var f = 1; f <= data.frame; f++) {
+
+			// 投球オブジェクト
+			var pin1 = data.game_data[p++];		// 1投目
+			var pin2 = null;					// 2投目
+			var pin3 = null;					// 3投目
+
+			// 1投目ストライク
+			if (pin1.pin >= data.pin_max) {
+				// 通常フレームは次の2投分を加算
+				if (f < data.frame) {
+					total += data.game_data[p].pin;
+					total += data.game_data[p + 1].pin;
+					output2(pin1, pin2);
+				}
+				// 最終フレーム
+				else {
+					pin2 = data.game_data[p++];	// 2投目
+					pin3 = data.game_data[p++];	// 3投目
+					output1(pin1);
+					if (pin2.pin >= data.pin_max) {	// 2投目ストライク
+						output1(pin2);
+						output1(pin3);
+					} else {
+						output2(pin2, pin3);
+					}
+				}
+			}
+
+			// 1投目ストライク以外
+			else {
+				pin2 = data.game_data[p++];		// 2投目
+
+				// 通常フレーム
+				if (f < data.frame) {
+					// スペアは次の一投を加算
+					if (pin1.pin + pin2.pin >= data.pin_max)
+						total += data.game_data[p].pin;
+					output2(pin1, pin2);
+				}
+				// 最終フレーム
+				else {
+					// 2投目でスペア
+					if (pin1.pin + pin2.pin >= data.pin_max) {
+						pin3 = data.game_data[p++];	// 3投目
+						output2(pin1, pin2);
+						output1(pin3);
+					}
+					// 3投目なし
+					else {
+						output2(pin1, pin2);
+						output1(null);
+					}
+				}
+			}
+
+			// 合計に加算／フレーム単位でスコア保存
+			total += pin1.pin + (pin2 ? pin2.pin : 0) + (pin3 ? pin3.pin : 0);
+			scores[f] = total;
+		}
+		html += '</tr>'
+
+		// スコア出力
+		html += '<tr><th>スコア</th>';
+		for (var f = 1; f <= data.frame; f++) {
+			var span = (f == data.frame) ? 3 : 2;
+			html += '<td colspan="' + span + '">' + scores[f] + '</td>';
+		}
+		html += '</tr>'
+
+		// HTML書き換え
+		document.getElementById('table').innerHTML = html;
+	}
+	</script>
+
+</body>
+</html>
